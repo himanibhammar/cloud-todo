@@ -1,0 +1,152 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Ansible — EC2 Server Setup Playbook
+#
+# What this does:
+#   1. Updates Ubuntu packages
+#   2. Installs Docker CE and the Compose plugin
+#   3. Ensures Docker is running and enabled at boot
+#   4. Adds the deploy user to the docker group
+#   5. Creates the application and data directories with correct permissions
+#   6. Verifies Docker is working
+#
+# Usage:
+#   ansible-playbook -i inventory.ini ansible/setup.yml
+#
+# Variables (override in inventory or via --extra-vars):
+#   ansible_user          : SSH user on the EC2 instance (default: ubuntu)
+#   ansible_ssh_private_key_file : Path to your .pem file (required)
+#   app_dir               : Application directory on the server (default: /opt/cloud-todo)
+#   data_dir              : SQLite data directory            (default: /opt/cloud-todo/data)
+# ═══════════════════════════════════════════════════════════════════════════
+
+---
+- name: Configure EC2 server for Cloud To-Do deployment
+  hosts: ec2
+  become: true          # sudo / root privilege escalation
+  gather_facts: true
+
+  vars:
+    app_dir:  /opt/cloud-todo
+    data_dir: /opt/cloud-todo/data
+    deploy_user: ubuntu   # Default Ubuntu EC2 SSH user
+
+  tasks:
+
+    # ── 1. System update ─────────────────────────────────────────────────────
+    - name: Update apt package cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Upgrade all installed packages
+      ansible.builtin.apt:
+        upgrade: dist
+        autoremove: true
+
+    # ── 2. Install prerequisite packages ────────────────────────────────────
+    - name: Install Docker prerequisites
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+          - python3-pip
+          - acl          # needed for Ansible to become non-root users
+        state: present
+
+    # ── 3. Docker GPG key ────────────────────────────────────────────────────
+    - name: Create Docker keyring directory
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Download Docker GPG key
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        mode: "0644"
+
+    # ── 4. Docker apt repository ─────────────────────────────────────────────
+    - name: Add Docker apt repository
+      ansible.builtin.apt_repository:
+        repo: >-
+          deb [arch={{ ansible_architecture | replace('x86_64','amd64') }}
+          signed-by=/etc/apt/keyrings/docker.asc]
+          https://download.docker.com/linux/ubuntu
+          {{ ansible_distribution_release }} stable
+        state: present
+        filename: docker
+
+    # ── 5. Install Docker CE ──────────────────────────────────────────────────
+    - name: Install Docker CE and Compose plugin
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+        update_cache: true
+
+    # ── 6. Start and enable Docker ────────────────────────────────────────────
+    - name: Ensure Docker service is started and enabled
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: true
+
+    # ── 7. Add deploy user to docker group ───────────────────────────────────
+    - name: Add {{ deploy_user }} to docker group
+      ansible.builtin.user:
+        name: "{{ deploy_user }}"
+        groups: docker
+        append: true
+
+    # ── 8. Create application directories ────────────────────────────────────
+    - name: Create application directory
+      ansible.builtin.file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: "0755"
+
+    - name: Create data directory for SQLite database
+      ansible.builtin.file:
+        path: "{{ data_dir }}"
+        state: directory
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: "0755"
+
+    # ── 9. Verify Docker works ────────────────────────────────────────────────
+    - name: Verify Docker is working
+      ansible.builtin.command: docker --version
+      register: docker_version_output
+      changed_when: false
+
+    - name: Print Docker version
+      ansible.builtin.debug:
+        msg: "Docker version: {{ docker_version_output.stdout }}"
+
+    - name: Verify Docker Compose plugin works
+      ansible.builtin.command: docker compose version
+      register: compose_version_output
+      changed_when: false
+
+    - name: Print Docker Compose version
+      ansible.builtin.debug:
+        msg: "Docker Compose: {{ compose_version_output.stdout }}"
+
+    # ── 10. Summary ───────────────────────────────────────────────────────────
+    - name: Server setup complete
+      ansible.builtin.debug:
+        msg: |
+          ✅ Server configuration complete.
+          Application directory : {{ app_dir }}
+          Data directory        : {{ data_dir }}
+          Docker                : {{ docker_version_output.stdout }}
+          Next step: run the Jenkins pipeline to build and deploy the app.

@@ -1,0 +1,16 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Ansible Inventory — Example
+#
+# Copy this file to inventory.ini, fill in your EC2 IP, and NEVER commit
+# inventory.ini to Git (it is in .gitignore).
+# ═══════════════════════════════════════════════════════════════════════════
+
+[ec2]
+# Replace with your EC2 instance's public IP address from Terraform output
+YOUR.EC2.PUBLIC.IP ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/your-key.pem
+
+[ec2:vars]
+# These vars apply to all hosts in the [ec2] group
+ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+app_dir=/opt/cloud-todo
+data_dir=/opt/cloud-todo/data

@@ -1,0 +1,22 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# terraform.tfvars.example
+#
+# Copy this file to terraform.tfvars and fill in your values.
+# NEVER commit terraform.tfvars to Git (it is in .gitignore).
+# ═══════════════════════════════════════════════════════════════════════════
+
+aws_region       = "ap-south-1"    # Change to your preferred AWS region
+aws_profile      = ""              # Leave empty to use default AWS credential chain
+                                   # OR set to your named profile: "myprofile"
+
+instance_type    = "t2.micro"      # Free Tier eligible
+ami_id           = ""              # Leave empty to auto-resolve Ubuntu 22.04 LTS
+
+key_name         = "my-ec2-key"    # Name of your existing EC2 Key Pair (NOT the .pem file path)
+
+# Replace with YOUR public IP address + /32
+# Find it with: curl https://ifconfig.me
+ssh_allowed_cidr = "YOUR.PUBLIC.IP.ADDRESS/32"
+
+app_port         = 80
+project_name     = "cloud-todo"

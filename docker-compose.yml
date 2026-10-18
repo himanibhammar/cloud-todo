@@ -1,0 +1,48 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Cloud To-Do — Docker Compose
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Local usage:
+#   docker compose up --build          # start (builds image)
+#   docker compose down                # stop
+#   docker compose down -v             # stop AND remove the data volume
+#
+# Override host port with an environment variable:
+#   HOST_PORT=8080 docker compose up --build
+#
+# ═══════════════════════════════════════════════════════════════════════════
+
+services:
+  todo-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cloud-todo:latest
+    container_name: cloud-todo-app
+    restart: unless-stopped
+
+    ports:
+      # Host port is configurable; defaults to 5000 for local dev.
+      # On EC2 this is overridden to 80 via the HOST_PORT env var.
+      - "${HOST_PORT:-5000}:5000"
+
+    environment:
+      DATABASE_PATH: /data/tasks.db
+      ENABLE_CORS: "false"
+
+    volumes:
+      # Named volume keeps the SQLite database between container restarts and
+      # image rebuilds.  Data is NOT lost when the container is replaced.
+      - todo-data:/data
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+
+# ── Named volume (managed by Docker) ─────────────────────────────────────────
+volumes:
+  todo-data:
+    driver: local
